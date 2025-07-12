@@ -1,7 +1,14 @@
 import type { GetStaticPaths, GetStaticProps, NextPage } from "next";
 import Image from "next/image";
 import PhotoSwipeLightbox from "photoswipe/lightbox";
-import { Fragment, useEffect, useId, useMemo } from "react";
+import {
+  Fragment,
+  type ReactNode,
+  useEffect,
+  useId,
+  useMemo,
+  useState,
+} from "react";
 
 import { getClassification } from "@alveusgg/data/build/ambassadors/classification";
 import ambassadors, {
@@ -27,7 +34,7 @@ import enclosures from "@alveusgg/data/build/enclosures";
 import { getIUCNStatus } from "@alveusgg/data/build/iucn";
 
 import { classes } from "@/utils/classes";
-import { formatPartialDateString } from "@/utils/datetime";
+import { formatPartialDateString } from "@/utils/datetime-partial";
 import { typeSafeObjectKeys } from "@/utils/helpers";
 import { getDefaultPhotoswipeLightboxOptions } from "@/utils/photoswipe";
 import { convertToSlug } from "@/utils/slugs";
@@ -37,10 +44,12 @@ import AnimalQuest from "@/components/content/AnimalQuest";
 import Box from "@/components/content/Box";
 import Carousel from "@/components/content/Carousel";
 import Heading from "@/components/content/Heading";
+import Lightbox from "@/components/content/Lightbox";
 import Link from "@/components/content/Link";
 import Meta from "@/components/content/Meta";
+import PartialDateDiff from "@/components/content/PartialDateDiff";
 import Section from "@/components/content/Section";
-import { Lightbox, Preview } from "@/components/content/YouTube";
+import { YouTubeEmbed, YouTubePreview } from "@/components/content/YouTube";
 
 type Stat = {
   title: string;
@@ -59,7 +68,7 @@ const getStats = (ambassador: Ambassador): Stats => {
       value: (
         <>
           <p>{species.name}</p>
-          <p className="text-alveus-green-700 italic">
+          <p className="text-base text-alveus-green-700 italic">
             {species.scientificName} (
             <Link
               href={`/ambassadors#classification:${convertToSlug(
@@ -119,7 +128,16 @@ const getStats = (ambassador: Ambassador): Stats => {
         title: `Date of ${
           { live: "Birth", egg: "Hatching", seed: "Planting" }[species.birth]
         }`,
-        value: <p>{formatPartialDateString(ambassador.birth)}</p>,
+        value: (
+          <>
+            <p>{formatPartialDateString(ambassador.birth)}</p>
+            {ambassador.birth && (
+              <p className="text-base text-alveus-green-700 italic">
+                <PartialDateDiff date={ambassador.birth} suffix="old" />
+              </p>
+            )}
+          </>
+        ),
       },
       {
         title: "Sex",
@@ -127,7 +145,16 @@ const getStats = (ambassador: Ambassador): Stats => {
       },
       {
         title: "Arrived at Alveus",
-        value: <p>{formatPartialDateString(ambassador.arrival)}</p>,
+        value: (
+          <>
+            <p>{formatPartialDateString(ambassador.arrival)}</p>
+            {ambassador.arrival && (
+              <p className="text-base text-alveus-green-700 italic">
+                <PartialDateDiff date={ambassador.arrival} suffix="ago" />
+              </p>
+            )}
+          </>
+        ),
       },
       {
         title: "Enclosure",
@@ -249,6 +276,20 @@ const AmbassadorPage: NextPage<AmbassadorPageProps> = ({
         };
       }, {}),
     [images],
+  );
+
+  const [clipsLightboxOpen, setClipsLightboxOpen] = useState<string>();
+
+  const clipsLightboxItems = useMemo(
+    () =>
+      ambassador.clips.reduce<Record<string, ReactNode>>(
+        (acc, clip) => ({
+          ...acc,
+          [clip.id]: <YouTubeEmbed videoId={clip.id} caption={clip.caption} />,
+        }),
+        {},
+      ),
+    [ambassador.clips],
   );
 
   return (
@@ -423,28 +464,35 @@ const AmbassadorPage: NextPage<AmbassadorPageProps> = ({
             &apos;s Highlights
           </Heading>
 
-          <Lightbox id="highlights" className="flex flex-wrap">
-            {({ Trigger }) => (
-              <>
-                {ambassador.clips.map(({ id, caption }) => (
-                  <div
-                    key={id}
-                    className="mx-auto flex basis-full flex-col items-center justify-start py-8 md:px-8 lg:basis-1/2"
-                  >
-                    <Trigger
-                      videoId={id}
-                      caption={caption}
-                      className="w-full max-w-2xl"
-                    >
-                      <Preview videoId={id} />
-                    </Trigger>
+          <div className="flex flex-wrap">
+            {ambassador.clips.map(({ id, caption }) => (
+              <div
+                key={id}
+                className="mx-auto flex basis-full flex-col items-center justify-start py-8 md:px-8 lg:basis-1/2"
+              >
+                <Link
+                  href={`https://www.youtube.com/watch?v=${id}`}
+                  external
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setClipsLightboxOpen(id);
+                  }}
+                  className="w-full max-w-2xl"
+                  custom
+                >
+                  <YouTubePreview videoId={id} />
+                </Link>
 
-                    <p className="mt-2 text-center text-xl">{caption}</p>
-                  </div>
-                ))}
-              </>
-            )}
-          </Lightbox>
+                <p className="mt-2 text-center text-xl">{caption}</p>
+              </div>
+            ))}
+          </div>
+
+          <Lightbox
+            open={clipsLightboxOpen}
+            onClose={() => setClipsLightboxOpen(undefined)}
+            items={clipsLightboxItems}
+          />
         </Section>
       )}
     </>
